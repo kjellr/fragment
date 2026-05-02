@@ -19,8 +19,8 @@ const IMAGE_DEFAULTS: Record<string, number> = {
 }
 
 export default function Page() {
-  const [effectId, setEffectId] = useState<EffectId>('image')
-  const [params, setParams] = useState({ ...DEFAULT_PARAMS, ...IMAGE_DEFAULTS })
+  const [effectId, setEffectId] = useState<EffectId>('video')
+  const [params, setParams] = useState({ ...DEFAULT_PARAMS })
   const [colorA, setColorA] = useState('#ffffff')
   const [colorB, setColorB] = useState('#99b5ce')
   const [colorMode, setColorMode] = useState<'palette' | 'source'>('source')
