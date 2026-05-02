@@ -61,6 +61,12 @@ export default function Page() {
     <div className="flex h-full w-full" style={{ background: 'var(--void, #050507)' }}>
       {/* Canvas — fills remaining space */}
       <div className="flex-1 relative overflow-hidden">
+        {/* Branding — mobile only */}
+        <div className="lg:hidden absolute top-4 left-4 z-10 flex items-baseline gap-2">
+          <span style={{ fontFamily: 'var(--font-serif)', fontSize: 24, color: 'var(--foreground)', lineHeight: 1 }}>Fragment</span>
+          <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>shader studio</span>
+        </div>
+
         {/* Settings toggle — mobile only */}
         <button
           onClick={() => setSidebarOpen(true)}
