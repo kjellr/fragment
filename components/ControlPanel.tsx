@@ -1,8 +1,8 @@
 'use client'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import {
-  Wind, Type, ImageIcon, Video,
-  ChevronRight, RotateCcw,
+  Wind, Type, ImageIcon, Video, Grid2x2,
+  ChevronRight, RotateCcw, Copy, Check,
 } from 'lucide-react'
 import InputZone from './InputZone'
 import { EFFECTS, DEFAULT_PARAMS, type EffectId, type EffectDef } from '@/lib/effects'
@@ -12,6 +12,7 @@ const ICONS: Record<EffectId, React.ReactNode> = {
   text:  <Type size={14} />,
   image: <ImageIcon size={14} />,
   video: <Video size={14} />,
+  grid:  <Grid2x2 size={14} />,
 }
 
 interface Props {
@@ -63,6 +64,32 @@ export default function ControlPanel({
     for (const p of effect.params) onParamChange(p.key, p.default)
   }, [effect, onParamChange])
 
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(() => {
+    const paramLines = effect.params.map(p => {
+      const val = params[p.key] ?? p.default
+      const display = p.step < 1 ? val.toFixed(2) : Math.round(val)
+      return `  - ${p.label}: ${display}${p.unit ? ' ' + p.unit : ''} (range: ${p.min}–${p.max})`
+    }).join('\n')
+
+    const text = [
+      `Effect: ${effect.name}`,
+      `Description: ${effect.description}`,
+      ``,
+      `Color A: ${colorA}`,
+      `Color B: ${colorB}`,
+      ``,
+      `Parameters:`,
+      paramLines,
+    ].join('\n')
+
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }, [effect, params, colorA, colorB])
+
   return (
     <aside
       className="flex flex-col h-full"
@@ -82,6 +109,29 @@ export default function ControlPanel({
           Fragment
         </span>
         <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>shader studio</span>
+        <div className="ml-auto relative group">
+          <button
+            onClick={handleCopy}
+            className="p-1.5 rounded"
+            style={{ color: copied ? 'var(--mint)' : 'var(--muted-foreground)' }}
+          >
+            {copied
+              ? (
+                <span key="check" style={{ display: 'inline-flex', animation: 'icon-check-in 250ms ease-out both' }}>
+                  <Check size={13} />
+                </span>
+              ) : (
+                <Copy size={13} key="copy" />
+              )
+            }
+          </button>
+          <div
+            className="absolute right-0 top-full mt-1.5 px-2 py-1 rounded text-xs pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+            style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--muted-foreground)' }}
+          >
+            Copy prompt
+          </div>
+        </div>
       </div>
 
       {/* Effect selector */}
@@ -270,7 +320,7 @@ export default function ControlPanel({
           }}>
             <div style={{ overflow: 'hidden' }}>
               <div className="flex flex-col gap-4 px-4 pb-3">
-                {effect.params.map(p => {
+                {effect.params.filter(p => !(p.key === 'colorMix' && colorMode === 'source')).map(p => {
                   const val = params[p.key] ?? p.default
                   return (
                     <div key={p.key} className="flex flex-col gap-1.5">

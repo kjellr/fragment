@@ -10,7 +10,6 @@ const ShaderCanvas = dynamic(() => import('@/components/ShaderCanvas'), { ssr: f
 const IMAGE_DEFAULTS: Record<string, number> = {
   count:        10000,
   spring:       15,
-  damping:      3,
   noiseScale:   0,
   noiseSpeed:   0.40,
   repulRadius:  300,
@@ -101,7 +100,10 @@ export default function Page() {
         onParamChange={handleParamChange}
         onColorChange={(a, b) => { setColorMode('palette'); handleColorChange(a, b) }}
         onColorModeChange={setColorMode}
-        onInputChange={setInputData}
+        onInputChange={data => {
+          setInputData(data)
+          if (data.type === 'video' && data.isNewUpload) setParams(p => ({ ...p, zoom: 1 }))
+        }}
       />
     </div>
   )

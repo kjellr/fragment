@@ -12,6 +12,7 @@ interface InputState {
   imageEl?: HTMLImageElement | HTMLCanvasElement
   videoEl?: HTMLVideoElement
   preview?: string // data URL for display
+  isNewUpload?: boolean
 }
 
 const TYPEFACES = [
@@ -106,7 +107,7 @@ export default function InputZone({ effectId, onInputChange }: Props) {
       vid.muted = true
       vid.play().catch(() => {})
       setIsPlaying(true)
-      commit({ type: 'video', videoEl: vid, preview: url })
+      commit({ type: 'video', videoEl: vid, preview: url, isNewUpload: true })
     }
   }, [commit])
 

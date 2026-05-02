@@ -197,6 +197,69 @@ void main() {
 }
 `
 
+const GRID_FRAG = `
+precision highp float;
+uniform vec2 uResolution;
+uniform vec2 uMouse;
+uniform float uTime;
+uniform float uGridSpacing;
+uniform float uDotRadius;
+uniform float uWaveAmp;
+uniform float uWaveRadius;
+uniform vec3 uColorA;
+uniform vec3 uColorB;
+// Each ripple: xy = screen pos (px, bottom-left origin), z = birth time (seconds). z<0 = inactive.
+uniform vec3 uRipples[8];
+uniform float uRippleAmp;
+uniform float uRippleSpeed;
+varying vec2 vUv;
+
+void main() {
+  vec2 px = vUv * uResolution;
+
+  // Nearest grid cell center
+  vec2 cell = floor(px / uGridSpacing + 0.5) * uGridSpacing;
+
+  vec2 disp = vec2(0.0);
+
+  // Static cursor push
+  vec2 toCursor = cell - uMouse;
+  float dCursor = length(toCursor) + 0.001;
+  float cf = 1.0 - clamp(dCursor / uWaveRadius, 0.0, 1.0);
+  cf = cf * cf * cf;
+  disp += (toCursor / dCursor) * cf * uWaveAmp;
+
+
+  // Ripples
+  for (int i = 0; i < 8; i++) {
+    float birthTime = uRipples[i].z;
+    if (birthTime < 0.0) continue;
+    vec2 center = uRipples[i].xy;
+    float age = uTime - birthTime;
+    if (age > 5.0) continue;
+    float waveFront = age * uRippleSpeed;
+    vec2 fromCenter = cell - center;
+    float r = length(fromCenter) + 0.001;
+    float distToWave = r - waveFront;
+    float sigma = uGridSpacing * 2.5;
+    float envelope = exp(-age * 0.9) * uRippleAmp;
+    float wave = envelope
+      * exp(-distToWave * distToWave / (sigma * sigma))
+      * cos(distToWave * 0.18);
+    disp += (fromCenter / r) * wave;
+  }
+
+  vec2 displacedCell = cell + disp;
+  float d = length(px - displacedCell);
+  float dotMask = 1.0 - smoothstep(uDotRadius - 0.5, uDotRadius + 0.5, d);
+  if (dotMask < 0.01) discard;
+
+  float dispMag = clamp(length(disp) / max(uWaveAmp + uRippleAmp, 1.0), 0.0, 1.0);
+  vec3 col = mix(uColorA, uColorB, dispMag);
+  gl_FragColor = vec4(col, dotMask * 0.9);
+}
+`
+
 // ── Helpers ────────────────────────────────────────────
 function makeRT(w: number, h: number) {
   return new THREE.WebGLRenderTarget(w, h, {
@@ -232,12 +295,21 @@ export interface EngineParams {
   friction?: number
   colorMix?: number
   threshold?: number
+  noiseAmp?: number
   viscosity?: number
   forceRadius?: number
   iterations?: number
   noiseContrast?: number
+  brightness?: number
+  jitter?: number
   colorA?: string
   colorB?: string
+  gridSpacing?: number
+  dotRadius?: number
+  waveAmp?: number
+  waveRadius?: number
+  rippleAmp?: number
+  rippleSpeed?: number
 }
 
 export class ParticleEngine {
@@ -305,16 +377,26 @@ export class ParticleEngine {
   private videoFrameCounter = 0
   private videoDispX: Float32Array | null = null
   private videoDispY: Float32Array | null = null
+  private videoTargets: Float32Array | null = null  // x,y pairs per particle
+  private videoBlend = 1  // 0 = intro (spring), 1 = settled (direct stamp)
+
+  private gridScene!: THREE.Scene
+  private gridMat: THREE.ShaderMaterial | null = null
+  private gridRippleSlot = 0
+  private timeNow = 0
+  private lastAutoRippleTime = 0
 
   constructor(canvas: HTMLCanvasElement, params: EngineParams = {}) {
     this.params = {
       count: 6000, speed: 1.2, spring: 5, damping: 4,
-      noiseScale: 0.6, noiseSpeed: 0.18,
+      noiseScale: 0.6, noiseSpeed: 0.18, noiseAmp: 18,
       attraction: 1.5, repulRadius: 120, repulStrength: 3,
       particleSize: 2.5, friction: 4, colorMix: 0.7,
       threshold: 0.2, viscosity: 0.998, forceRadius: 0.05,
-      iterations: 25, noiseContrast: 1.5,
+      iterations: 25, noiseContrast: 1.5, brightness: 1.0, jitter: 0.3,
       colorA: '#78d2aa', colorB: '#3a7cbd',
+      gridSpacing: 30, dotRadius: 2.5, waveAmp: 35,
+      waveRadius: 150, rippleAmp: 30, rippleSpeed: 200,
       ...params,
     }
     this.count = this.params.count
@@ -448,6 +530,39 @@ export class ParticleEngine {
     this.noiseScene.add(quad)
   }
 
+  private initGrid() {
+    const rippleData = Array.from({ length: 8 }, () => new THREE.Vector3(0, 0, -1))
+    this.gridMat = makeFullscreenMaterial(GRID_FRAG, {
+      uResolution:  { value: new THREE.Vector2(this.width, this.height) },
+      uMouse:       { value: new THREE.Vector2(-9999, -9999) },
+      uTime:        { value: 0 },
+      uGridSpacing: { value: 30 },
+      uDotRadius:   { value: 2.5 },
+      uWaveAmp:     { value: 35 },
+      uWaveRadius:  { value: 150 },
+      uColorA:      { value: this.colorAVec },
+      uColorB:      { value: this.colorBVec },
+      uRipples:     { value: rippleData },
+      uRippleAmp:   { value: 30 },
+      uRippleSpeed: { value: 200 },
+      uMouseVel:    { value: new THREE.Vector2(0, 0) },
+      uCursorForce: { value: 1.0 },
+    })
+    this.gridMat.transparent = true
+    this.gridScene = new THREE.Scene()
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.gridMat)
+    this.gridScene.add(quad)
+  }
+
+  addGridRipple(clientX: number, clientY: number, canvasRect: DOMRect) {
+    if (!this.gridMat) return
+    const sx = clientX - canvasRect.left
+    const sy = this.height - (clientY - canvasRect.top)  // flip Y: shader origin is bottom-left
+    const slot = this.gridRippleSlot % 8
+    this.gridRippleSlot++
+    ;(this.gridMat.uniforms.uRipples.value as THREE.Vector3[])[slot].set(sx, sy, this.timeNow)
+  }
+
   // ── Mouse ──────────────────────────────────────────
   private bindMouse(canvas: HTMLCanvasElement) {
     canvas.addEventListener('mousemove', (e) => {
@@ -458,6 +573,12 @@ export class ParticleEngine {
     canvas.addEventListener('mousedown', () => { this.isMouseDown = true })
     canvas.addEventListener('mouseup',   () => { this.isMouseDown = false })
     canvas.addEventListener('mouseleave',() => { this.isMouseDown = false })
+
+    canvas.addEventListener('click', (e) => {
+      if (this.effectId === 'grid') {
+        this.addGridRipple(e.clientX, e.clientY, canvas.getBoundingClientRect())
+      }
+    })
 
     canvas.addEventListener('touchmove', (e) => {
       e.preventDefault()
@@ -493,20 +614,22 @@ export class ParticleEngine {
       let px = this.positions[i3], py = this.positions[i3 + 1]
       let vx = this.velocities[i2], vy = this.velocities[i2 + 1]
 
-      // Curl noise
-      const [cnx, cny] = this.curl(
-        (px + this.seeds[i] * 200) * nS,
-        (py + this.seeds[i] * 200) * nS,
-        nT
-      )
-      vx += cnx * speed * dt * 60
-      vy += cny * speed * dt * 60
+      // Curl noise (skip entirely when noiseScale=0 to avoid uniform drift artifact)
+      if (noiseScale > 0) {
+        const [cnx, cny] = this.curl(
+          (px + this.seeds[i] * 200) * nS,
+          (py + this.seeds[i] * 200) * nS,
+          nT
+        )
+        vx += cnx * speed * dt * 60
+        vy += cny * speed * dt * 60
+      }
 
       // Spring toward target
       if (hasT) {
         const tx = this.targets[i3], ty = this.targets[i3 + 1]
         vx += (tx - px) * spring * dt
-        vy += (ty - py) * damping * dt
+        vy += (ty - py) * spring * dt
       }
 
       // Free-swarm attraction toward cursor
@@ -603,9 +726,12 @@ export class ParticleEngine {
 
     if (bright.length === 0) return
 
-    // Stamp particle positions directly onto the video frame — no spring physics.
-    // Particle i always maps to the same proportional slot in the luminance
-    // distribution so it tracks the video content smoothly rather than flickering.
+    // Write video positions into videoTargets (not directly to positions).
+    // applyVideoDisplacement lerps toward them — spring physics during intro,
+    // direct stamp once settled — matching the image/text scatter-then-resolve feel.
+    if (!this.videoTargets || this.videoTargets.length !== this.count * 2) {
+      this.videoTargets = new Float32Array(this.count * 2)
+    }
     for (let i = 0; i < this.count; i++) {
       const slot = (i / this.count) * totalWeight
       let lo = 0, hi = cumWeights.length - 1
@@ -614,10 +740,8 @@ export class ParticleEngine {
         if (cumWeights[mid] < slot) lo = mid + 1
         else hi = mid
       }
-      this.positions[i * 3]      = bright[lo][0]
-      this.positions[i * 3 + 1]  = bright[lo][1]
-      this.velocities[i * 2]     = 0
-      this.velocities[i * 2 + 1] = 0
+      this.videoTargets[i * 2]     = bright[lo][0]
+      this.videoTargets[i * 2 + 1] = bright[lo][1]
       if (this.sourceColors) {
         this.colors[i * 3]     = bright[lo][2]
         this.colors[i * 3 + 1] = bright[lo][3]
@@ -699,16 +823,32 @@ export class ParticleEngine {
       this.videoDispY = new Float32Array(this.count)
     }
 
+    // Ramp blend from 0→1 over ~2s
+    this.videoBlend = Math.min(1, this.videoBlend + dt * 0.5)
+
     const { repulRadius, repulStrength, particleSize, jitter = 0 } = this.params
     const mx = this.mouseX, my = this.mouseY
-    const decay = 1 - 4 * dt  // displacement springs back in ~0.5s
-    const n = this.noise3D
+    const decay = 1 - 4 * dt
 
     for (let i = 0; i < this.count; i++) {
-      let dx = this.videoDispX[i] * decay
-      let dy = this.videoDispY[i] * decay
+      let px = this.positions[i * 3], py = this.positions[i * 3 + 1]
 
-      const px = this.positions[i * 3], py = this.positions[i * 3 + 1]
+      if (this.videoTargets) {
+        const tx = this.videoTargets[i * 2], ty = this.videoTargets[i * 2 + 1]
+        if (this.videoBlend >= 1) {
+          // Direct stamp — lerp has already converged so the switch is seamless
+          px = tx; py = ty
+        } else {
+          // Lerp rate ramps 0.04→0.35; particles are ~99.9% at target by blend=1
+          const rate = 0.04 + 0.31 * this.videoBlend
+          px += (tx - px) * rate
+          py += (ty - py) * rate
+        }
+      }
+
+      // Cursor repulsion displacement (decays back)
+      let dx = this.videoDispX[i] * decay
+      let dy = this.videoDispY![i] * decay
       const cx = px - mx, cy = py - my
       const dist = Math.sqrt(cx * cx + cy * cy) + 0.001
       if (dist < repulRadius) {
@@ -716,24 +856,22 @@ export class ParticleEngine {
         dx += (cx / dist) * force * repulStrength * dt * 60
         dy += (cy / dist) * force * repulStrength * dt * 60
       }
-
       this.videoDispX[i] = dx
-      this.videoDispY[i] = dy
+      this.videoDispY![i] = dy
 
       // Jitter: curl noise at world position so nearby particles flow together
       let jx = 0, jy = 0
       if (jitter > 0) {
         const nx = px * 0.004 + this.seeds[i] * 0.1
         const ny = py * 0.004 + this.seeds[i] * 0.1
-        const [cx, cy] = this.curl(nx, ny, time * 0.25)
-        jx = cx * jitter * 0.6
-        jy = cy * jitter * 0.6
+        const [cjx, cjy] = this.curl(nx, ny, time * 0.25)
+        jx = cjx * jitter * 0.6
+        jy = cjy * jitter * 0.6
       }
 
-      this.positions[i * 3]     += dx + jx
-      this.positions[i * 3 + 1] += dy + jy
+      this.positions[i * 3]     = px + dx + jx
+      this.positions[i * 3 + 1] = py + dy + jy
 
-      // Size animation (normally handled by updateParticles)
       this.sizes[i] = particleSize * (0.5 + 0.8 * (Math.sin(this.seeds[i] * 3.7 + time * 0.5) * 0.5 + 0.5))
     }
     this.geometry.attributes.position.needsUpdate = true
@@ -746,15 +884,45 @@ export class ParticleEngine {
     const dt = Math.min((time - this.lastTime) / 1000, 0.05)
     this.lastTime = time
 
-    this.renderer.setRenderTarget(null)
+    this.timeNow = time * 0.001
 
-    if (this.effectId === 'video') {
+    if (this.effectId === 'grid') {
+      if (this.gridMat) {
+        const m = this.gridMat.uniforms
+        m.uTime.value = this.timeNow
+        m.uMouse.value.set(
+          this.mouseX + this.width / 2,
+          this.mouseY + this.height / 2,
+        )
+        m.uMouseVel.value.set(
+          this.mouseX - this.prevMouseX,
+          this.mouseY - this.prevMouseY,
+        )
+        // Auto-ripples
+        const freq: number = (this.params as any).rippleFreq ?? 0
+        if (freq > 0 && this.timeNow - this.lastAutoRippleTime >= 1 / freq) {
+          this.lastAutoRippleTime = this.timeNow
+          const sx = Math.random() * this.width
+          const sy = Math.random() * this.height
+          const slot = this.gridRippleSlot % 8
+          this.gridRippleSlot++
+          ;(m.uRipples.value as THREE.Vector3[])[slot].set(sx, sy, this.timeNow)
+        }
+      }
+      this.renderer.setClearColor(0x050507, 1)
+      this.renderer.setRenderTarget(null)
+      this.renderer.clear()
+      this.renderer.render(this.gridScene, this.fluidCamera)
+    } else if (this.effectId === 'video') {
       this.updateVideoTargets()
       this.applyVideoDisplacement(dt, time * 0.001)
+      this.renderer.setRenderTarget(null)
+      this.renderer.render(this.scene, this.camera)
     } else {
       this.updateParticles(dt, time * 0.001)
+      this.renderer.setRenderTarget(null)
+      this.renderer.render(this.scene, this.camera)
     }
-    this.renderer.render(this.scene, this.camera)
 
     this.prevMouseX = this.mouseX
     this.prevMouseY = this.mouseY
@@ -764,15 +932,23 @@ export class ParticleEngine {
   setEffect(id: EffectId) {
     this.effectId = id
     this.hasTargets = false
-    // Reset particles to random positions when switching to free effects
-    if (id === 'swarm') {
+    // Reset particles to random positions when switching to free or video effects
+    if (id === 'swarm' || id === 'video') {
       for (let i = 0; i < this.count; i++) {
-        this.positions[i * 3]     = (Math.random() - 0.5) * this.width
-        this.positions[i * 3 + 1] = (Math.random() - 0.5) * this.height
-        this.velocities[i * 2]    = 0
+        this.positions[i * 3]      = (Math.random() - 0.5) * this.width
+        this.positions[i * 3 + 1]  = (Math.random() - 0.5) * this.height
+        this.velocities[i * 2]     = 0
         this.velocities[i * 2 + 1] = 0
       }
       this.geometry.attributes.position.needsUpdate = true
+    }
+    if (id === 'video') {
+      this.videoBlend = 0
+      this.videoDispX = null
+      this.videoDispY = null
+    }
+    if (id === 'grid') {
+      if (!this.gridMat) this.initGrid()
     }
     this.renderer.setClearColor(0x050507, 1)
   }
@@ -912,6 +1088,17 @@ export class ParticleEngine {
       this.camera.updateProjectionMatrix()
     } else if (key === 'brightness') {
       this.material.uniforms.uBrightness.value = value
+    } else if (['gridSpacing','dotRadius','waveAmp','waveRadius',
+                'rippleAmp','rippleSpeed','cursorForce'].includes(key)) {
+      if (this.gridMat) {
+        const map: Record<string, string> = {
+          gridSpacing: 'uGridSpacing', dotRadius: 'uDotRadius',
+          waveAmp: 'uWaveAmp', waveRadius: 'uWaveRadius',
+          rippleAmp: 'uRippleAmp', rippleSpeed: 'uRippleSpeed',
+          cursorForce: 'uCursorForce',
+        }
+        this.gridMat.uniforms[map[key]].value = value
+      }
     }
   }
 
@@ -938,6 +1125,9 @@ export class ParticleEngine {
     this.camera.bottom = -height / 2
     this.camera.updateProjectionMatrix()
     this.material.uniforms.uPixelRatio.value = this.renderer.getPixelRatio()
+    if (this.gridMat) {
+      this.gridMat.uniforms.uResolution.value.set(width, height)
+    }
   }
 
   dispose() {
