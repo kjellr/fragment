@@ -74,7 +74,7 @@ export default function Page() {
         >
           <Settings size={15} />
         </button>
-        <
+        <a
           href="https://kjellr.com"
           target="_blank"
           rel="noopener noreferrer"
