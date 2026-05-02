@@ -212,6 +212,7 @@ uniform vec3 uColorB;
 uniform vec3 uRipples[8];
 uniform float uRippleAmp;
 uniform float uRippleSpeed;
+uniform float uCursorForce;
 varying vec2 vUv;
 
 void main() {
@@ -229,6 +230,14 @@ void main() {
   cf = cf * cf * cf;
   disp += (toCursor / dCursor) * cf * uWaveAmp;
 
+  // Bulge — static dome that spreads dot spacing near cursor
+  if (uCursorForce > 0.0) {
+    float bulgeR = uWaveRadius * 2.0;
+    float t = clamp(dCursor / bulgeR, 0.0, 1.0);
+    float profile = sin(3.14159265 * t); // 0 at center, peaks at mid-radius, 0 at edge
+    disp += (toCursor / dCursor) * profile * uCursorForce * bulgeR * 0.35;
+  }
+
 
   // Ripples
   for (int i = 0; i < 8; i++) {
@@ -243,9 +252,7 @@ void main() {
     float distToWave = r - waveFront;
     float sigma = uGridSpacing * 2.5;
     float envelope = exp(-age * 0.9) * uRippleAmp;
-    float wave = envelope
-      * exp(-distToWave * distToWave / (sigma * sigma))
-      * cos(distToWave * 0.18);
+    float wave = envelope * exp(-distToWave * distToWave / (sigma * sigma));
     disp += (fromCenter / r) * wave;
   }
 
@@ -385,6 +392,9 @@ export class ParticleEngine {
   private gridRippleSlot = 0
   private timeNow = 0
   private lastAutoRippleTime = 0
+  private lastCursorRippleTime = 0
+  private smoothPushX = 0
+  private smoothPushY = 0
 
   constructor(canvas: HTMLCanvasElement, params: EngineParams = {}) {
     this.params = {
@@ -545,7 +555,6 @@ export class ParticleEngine {
       uRipples:     { value: rippleData },
       uRippleAmp:   { value: 30 },
       uRippleSpeed: { value: 200 },
-      uMouseVel:    { value: new THREE.Vector2(0, 0) },
       uCursorForce: { value: 1.0 },
     })
     this.gridMat.transparent = true
@@ -890,23 +899,26 @@ export class ParticleEngine {
       if (this.gridMat) {
         const m = this.gridMat.uniforms
         m.uTime.value = this.timeNow
-        m.uMouse.value.set(
-          this.mouseX + this.width / 2,
-          this.mouseY + this.height / 2,
-        )
-        m.uMouseVel.value.set(
-          this.mouseX - this.prevMouseX,
-          this.mouseY - this.prevMouseY,
-        )
-        // Auto-ripples
+
+        const cursorSX = this.mouseX + this.width / 2
+        const cursorSY = this.mouseY + this.height / 2
+
+        // Smooth the push position — lerpRate approaches 1 as lag→0, slows as lag→1
+        const lag: number = (this.params as any).pushLag ?? 0
+        const lerpRate = Math.pow(0.04, lag * dt * 60)
+        this.smoothPushX += (cursorSX - this.smoothPushX) * lerpRate
+        this.smoothPushY += (cursorSY - this.smoothPushY) * lerpRate
+        m.uMouse.value.set(this.smoothPushX, this.smoothPushY)
+
+        const ripples = m.uRipples.value as THREE.Vector3[]
+
+        // Periodic ripple at cursor position
         const freq: number = (this.params as any).rippleFreq ?? 0
         if (freq > 0 && this.timeNow - this.lastAutoRippleTime >= 1 / freq) {
           this.lastAutoRippleTime = this.timeNow
-          const sx = Math.random() * this.width
-          const sy = Math.random() * this.height
           const slot = this.gridRippleSlot % 8
           this.gridRippleSlot++
-          ;(m.uRipples.value as THREE.Vector3[])[slot].set(sx, sy, this.timeNow)
+          ripples[slot].set(cursorSX, cursorSY, this.timeNow)
         }
       }
       this.renderer.setClearColor(0x050507, 1)
