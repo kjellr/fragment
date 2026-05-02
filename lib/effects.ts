@@ -1,4 +1,5 @@
 export type EffectId = 'image' | 'video' | 'text' | 'swarm' | 'grid'
+export const VISIBLE_EFFECTS: EffectId[] = ['image', 'video', 'text', 'swarm']
 
 export interface ParamDef {
   key: string

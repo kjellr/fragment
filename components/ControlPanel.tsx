@@ -5,7 +5,7 @@ import {
   ChevronRight, RotateCcw, Copy, Check,
 } from 'lucide-react'
 import InputZone from './InputZone'
-import { EFFECTS, DEFAULT_PARAMS, type EffectId, type EffectDef } from '@/lib/effects'
+import { EFFECTS, VISIBLE_EFFECTS, DEFAULT_PARAMS, type EffectId, type EffectDef } from '@/lib/effects'
 
 const ICONS: Record<EffectId, React.ReactNode> = {
   swarm: <Wind size={14} />,
@@ -51,7 +51,7 @@ export default function ControlPanel({
   const [fading, setFading] = useState(false)
 
   useEffect(() => {
-    const idx = EFFECTS.findIndex(e => e.id === effectId)
+    const idx = EFFECTS.filter(e => VISIBLE_EFFECTS.includes(e.id)).findIndex(e => e.id === effectId)
     const btn = buttonRefs.current[idx]
     if (btn) setIndicator({ top: btn.offsetTop, height: btn.offsetHeight })
 
@@ -156,7 +156,7 @@ export default function ControlPanel({
             }}
           />
         )}
-        {EFFECTS.map((e, i) => (
+        {EFFECTS.filter(e => VISIBLE_EFFECTS.includes(e.id)).map((e, i) => (
           <button
             key={e.id}
             ref={el => { buttonRefs.current[i] = el }}
