@@ -32,6 +32,11 @@ export default function ShaderCanvas({ effectId, params, colorA, colorB, colorMo
     const canvas = canvasRef.current
     if (!canvas) return
     const engine = new ParticleEngine(canvas, params)
+    // Apply the initial effect immediately so the engine is in the correct mode
+    // before the first frame, and so the sync effect's guard doesn't skip it
+    // on StrictMode's second mount (refs persist across the unmount/remount cycle).
+    engine.setEffect(effectId)
+    prevEffect.current = effectId
     engineRef.current = engine
     onEngineReady?.(engine)
 
