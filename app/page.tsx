@@ -18,9 +18,15 @@ const IMAGE_DEFAULTS: Record<string, number> = {
   colorMix:     0.70,
 }
 
+const INITIAL_EFFECT: EffectId = 'video'
+const INITIAL_PARAMS = {
+  ...DEFAULT_PARAMS,
+  ...Object.fromEntries(EFFECTS.find(e => e.id === INITIAL_EFFECT)!.params.map(p => [p.key, p.default])),
+}
+
 export default function Page() {
-  const [effectId, setEffectId] = useState<EffectId>('video')
-  const [params, setParams] = useState({ ...DEFAULT_PARAMS })
+  const [effectId, setEffectId] = useState<EffectId>(INITIAL_EFFECT)
+  const [params, setParams] = useState(INITIAL_PARAMS)
   const [colorA, setColorA] = useState('#ffffff')
   const [colorB, setColorB] = useState('#99b5ce')
   const [colorMode, setColorMode] = useState<'palette' | 'source'>('source')
