@@ -112,8 +112,8 @@ export default function ControlPanel({
         <div className="ml-auto relative group">
           <button
             onClick={handleCopy}
-            className="p-1.5 rounded"
-            style={{ color: copied ? 'var(--mint)' : 'var(--muted-foreground)' }}
+            className="rounded"
+            style={{ color: copied ? 'var(--mint)' : 'var(--muted-foreground)', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
           >
             {copied
               ? (
