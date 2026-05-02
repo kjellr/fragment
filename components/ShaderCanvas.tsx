@@ -37,6 +37,8 @@ export default function ShaderCanvas({ effectId, params, colorA, colorB, colorMo
     // on StrictMode's second mount (refs persist across the unmount/remount cycle).
     engine.setEffect(effectId)
     prevEffect.current = effectId
+    prevParams.current = {}
+    prevColors.current = { a: '', b: '' }
     engineRef.current = engine
     onEngineReady?.(engine)
 
