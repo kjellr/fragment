@@ -62,7 +62,7 @@ export default function Page() {
       {/* Canvas — fills remaining space */}
       <div className="flex-1 relative overflow-hidden">
         {/* Branding — mobile only */}
-        <div className="lg:hidden absolute top-4 left-4 z-10 flex items-baseline gap-2">
+        <div className="lg:hidden absolute top-4 left-4 z-10 flex items-baseline gap-2" style={{ padding: 6 }}>
           <span style={{ fontFamily: 'var(--font-serif)', fontSize: 24, color: 'var(--foreground)', lineHeight: 1 }}>Fragment</span>
           <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>shader studio</span>
         </div>

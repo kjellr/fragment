@@ -104,12 +104,12 @@ export default function ControlPanel({
       }}
     >
       {/* App name */}
-      <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border)' }}>
+      <div className="hidden lg:flex px-4 py-3 items-baseline gap-2" style={{ borderBottom: '1px solid var(--border)' }}>
         <span style={{ fontFamily: 'var(--font-serif)', fontSize: 24, color: 'var(--foreground)', lineHeight: 1 }}>
           Fragment
         </span>
-        <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>shader studio</span>
-        <div className="ml-auto flex items-center gap-1">
+        <span className="text-sm lg:text-xs" style={{ color: 'var(--muted-foreground)' }}>shader studio</span>
+        <div className="ml-auto flex items-center gap-1" style={{ alignSelf: 'center' }}>
         <div className="relative group">
           <button
             onClick={handleCopy}
@@ -148,7 +148,7 @@ export default function ControlPanel({
 
       {/* Effect selector */}
       <div className="flex flex-col gap-0.5 px-3 py-3" style={{ borderBottom: '1px solid var(--border)', position: 'relative' }}>
-        <p className="text-xs uppercase tracking-widest mb-2 px-1" style={{ color: 'var(--muted-foreground)' }}>
+        <p className="text-sm lg:text-xs uppercase tracking-widest mb-2 px-1" style={{ color: 'var(--muted-foreground)' }}>
           Effect
         </p>
         {/* Sliding background pill */}
@@ -182,7 +182,7 @@ export default function ControlPanel({
             }}
           >
             <span style={{ opacity: e.id === effectId ? 1 : 0.5 }}>{ICONS[e.id]}</span>
-            <span className="font-mono text-xs">{e.name}</span>
+            <span className="font-mono text-sm lg:text-xs">{e.name}</span>
             {e.id === effectId && (
               <span className="ml-auto w-1.5 h-1.5 rounded-full" style={{ background: 'var(--mint)' }} />
             )}
@@ -198,7 +198,7 @@ export default function ControlPanel({
         <div style={{ borderBottom: '1px solid var(--border)' }}>
           <button
             onClick={() => setInputOpen(o => !o)}
-            className="flex items-center gap-1.5 text-xs uppercase tracking-widest w-full px-4 py-4 lg:py-3"
+            className="flex items-center gap-1.5 text-sm lg:text-xs uppercase tracking-widest w-full px-4 py-4 lg:py-3"
             style={{ color: 'var(--muted-foreground)' }}
           >
             <ChevronRight
@@ -223,7 +223,7 @@ export default function ControlPanel({
       <div style={{ borderBottom: '1px solid var(--border)' }}>
         <button
           onClick={() => setPaletteOpen(o => !o)}
-          className="flex items-center gap-1.5 text-xs uppercase tracking-widest w-full px-4 py-4 lg:py-3"
+          className="flex items-center gap-1.5 text-sm lg:text-xs uppercase tracking-widest w-full px-4 py-4 lg:py-3"
           style={{ color: 'var(--muted-foreground)' }}
         >
           <ChevronRight
@@ -243,7 +243,7 @@ export default function ControlPanel({
               {(effectId === 'image' || effectId === 'video') && (
                 <button
                   onClick={() => onColorModeChange('source')}
-                  className="w-full rounded h-11 lg:h-7 mb-1.5 transition-all text-xs font-mono"
+                  className="w-full rounded h-11 lg:h-7 mb-1.5 transition-all text-sm lg:text-xs font-mono"
                   style={{
                     background: 'transparent',
                     border: colorMode === 'source' ? '2px solid var(--foreground)' : '1px solid var(--border)',
@@ -273,7 +273,7 @@ export default function ControlPanel({
               </div>
               <div className="flex gap-2 items-center">
                 <div className="flex items-center gap-1.5">
-                  <label className="text-xs" style={{ color: 'var(--muted-foreground)' }}>A</label>
+                  <label className="text-sm lg:text-xs" style={{ color: 'var(--muted-foreground)' }}>A</label>
                   <input
                     type="color"
                     value={colorA}
@@ -283,7 +283,7 @@ export default function ControlPanel({
                   />
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <label className="text-xs" style={{ color: 'var(--muted-foreground)' }}>B</label>
+                  <label className="text-sm lg:text-xs" style={{ color: 'var(--muted-foreground)' }}>B</label>
                   <input
                     type="color"
                     value={colorB}
@@ -308,7 +308,7 @@ export default function ControlPanel({
           <div className="flex items-center px-4 py-4 lg:py-3">
             <button
               onClick={() => setParamsOpen(o => !o)}
-              className="flex items-center gap-1.5 text-xs uppercase tracking-widest flex-1"
+              className="flex items-center gap-1.5 text-sm lg:text-xs uppercase tracking-widest flex-1"
               style={{ color: 'var(--muted-foreground)' }}
             >
               <ChevronRight
@@ -337,10 +337,10 @@ export default function ControlPanel({
                   return (
                     <div key={p.key} className="flex flex-col gap-1.5">
                       <div className="flex justify-between items-baseline">
-                        <label className="text-xs font-mono" style={{ color: 'var(--muted-foreground)' }}>
+                        <label className="text-sm lg:text-xs font-mono" style={{ color: 'var(--muted-foreground)' }}>
                           {p.label}
                         </label>
-                        <span className="text-xs font-mono tabular-nums" style={{ color: 'var(--foreground)' }}>
+                        <span className="text-sm lg:text-xs font-mono tabular-nums" style={{ color: 'var(--foreground)' }}>
                           {p.step < 1 ? val.toFixed(2) : Math.round(val)}
                           {p.unit ? ` ${p.unit}` : ''}
                         </span>
@@ -358,8 +358,8 @@ export default function ControlPanel({
                         />
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-xs tabular-nums" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>{p.min}</span>
-                        <span className="text-xs tabular-nums" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>{p.max}</span>
+                        <span className="text-sm lg:text-xs tabular-nums" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>{p.min}</span>
+                        <span className="text-sm lg:text-xs tabular-nums" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>{p.max}</span>
                       </div>
                     </div>
                   )
@@ -374,7 +374,7 @@ export default function ControlPanel({
 
       {/* Footer */}
       <div className="mt-auto px-4 py-3" style={{ borderTop: '1px solid var(--border)' }}>
-        <p className="text-xs" style={{ color: 'var(--muted-foreground)', opacity: 0.4 }}>
+        <p className="text-sm lg:text-xs" style={{ color: 'var(--muted-foreground)', opacity: 0.4 }}>
           {effect.description}
         </p>
       </div>
