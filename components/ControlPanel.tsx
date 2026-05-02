@@ -114,7 +114,8 @@ export default function ControlPanel({
           <button
             onClick={handleCopy}
             className="rounded"
-            style={{ color: copied ? 'var(--mint)' : 'var(--muted-foreground)', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            className="rounded w-11 h-11 lg:w-7 lg:h-7 flex items-center justify-center flex-shrink-0"
+            style={{ color: copied ? 'var(--mint)' : 'var(--muted-foreground)' }}
           >
             {copied
               ? (
@@ -136,8 +137,8 @@ export default function ControlPanel({
         {onClose && (
           <button
             onClick={onClose}
-            className="lg:hidden rounded opacity-50 hover:opacity-100 transition-opacity"
-            style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--muted-foreground)' }}
+            className="lg:hidden rounded w-11 h-11 lg:w-7 lg:h-7 flex items-center justify-center flex-shrink-0 opacity-50 hover:opacity-100 transition-opacity"
+            style={{ color: 'var(--muted-foreground)' }}
           >
             <X size={16} />
           </button>
@@ -172,7 +173,7 @@ export default function ControlPanel({
             key={e.id}
             ref={el => { buttonRefs.current[i] = el }}
             onClick={() => onEffectChange(e.id)}
-            className="flex items-center gap-2.5 rounded px-2.5 py-2.5 lg:py-1.5 text-left text-sm cursor-pointer"
+            className="flex items-center gap-2.5 rounded px-2.5 min-h-[44px] lg:min-h-0 lg:py-1.5 text-left text-sm cursor-pointer"
             style={{
               position: 'relative',
               background: 'transparent',
@@ -242,7 +243,7 @@ export default function ControlPanel({
               {(effectId === 'image' || effectId === 'video') && (
                 <button
                   onClick={() => onColorModeChange('source')}
-                  className="w-full rounded h-10 lg:h-7 mb-1.5 transition-all text-xs font-mono"
+                  className="w-full rounded h-11 lg:h-7 mb-1.5 transition-all text-xs font-mono"
                   style={{
                     background: 'transparent',
                     border: colorMode === 'source' ? '2px solid var(--foreground)' : '1px solid var(--border)',
@@ -259,7 +260,7 @@ export default function ControlPanel({
                     key={preset.label}
                     onClick={() => onColorChange(preset.colorA, preset.colorB)}
                     title={preset.label}
-                    className="rounded h-10 lg:h-7 transition-all"
+                    className="rounded h-11 lg:h-7 transition-all"
                     style={{
                       background: `linear-gradient(135deg, ${preset.colorA}, ${preset.colorB})`,
                       border: colorMode === 'palette' && colorA === preset.colorA && colorB === preset.colorB
@@ -277,8 +278,8 @@ export default function ControlPanel({
                     type="color"
                     value={colorA}
                     onChange={e => onColorChange(e.target.value, colorB)}
-                    className="rounded cursor-pointer"
-                    style={{ width: 28, height: 20, padding: 1, background: 'none', border: '1px solid var(--border)' }}
+                    className="rounded cursor-pointer w-11 h-11 lg:w-7 lg:h-5"
+                    style={{ padding: 2, background: 'none', border: '1px solid var(--border)' }}
                   />
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -287,12 +288,12 @@ export default function ControlPanel({
                     type="color"
                     value={colorB}
                     onChange={e => onColorChange(colorA, e.target.value)}
-                    className="rounded cursor-pointer"
-                    style={{ width: 28, height: 20, padding: 1, background: 'none', border: '1px solid var(--border)' }}
+                    className="rounded cursor-pointer w-11 h-11 lg:w-7 lg:h-5"
+                    style={{ padding: 2, background: 'none', border: '1px solid var(--border)' }}
                   />
                 </div>
                 <div
-                  className="flex-1 h-5 rounded"
+                  className="flex-1 h-11 lg:h-5 rounded"
                   style={{ background: `linear-gradient(90deg, ${colorA}, ${colorB})` }}
                 />
               </div>
@@ -304,7 +305,7 @@ export default function ControlPanel({
       {/* Parameters */}
       {effect.params.length > 0 && (
         <div>
-          <div className="flex items-center px-4 py-3">
+          <div className="flex items-center px-4 py-4 lg:py-3">
             <button
               onClick={() => setParamsOpen(o => !o)}
               className="flex items-center gap-1.5 text-xs uppercase tracking-widest flex-1"
@@ -319,7 +320,7 @@ export default function ControlPanel({
             <button
               onClick={handleReset}
               title="Reset to defaults"
-              className="p-0.5 rounded transition-colors hover:opacity-100 opacity-40"
+              className="flex items-center justify-center w-11 h-11 lg:w-7 lg:h-7 rounded transition-colors hover:opacity-100 opacity-40"
             >
               <RotateCcw size={11} />
             </button>
@@ -330,7 +331,7 @@ export default function ControlPanel({
             transition: 'grid-template-rows 220ms cubic-bezier(0.4, 0, 0.2, 1)',
           }}>
             <div style={{ overflow: 'hidden' }}>
-              <div className="flex flex-col gap-4 px-4 pb-3">
+              <div className="flex flex-col gap-6 lg:gap-4 px-4 pb-4 lg:pb-3">
                 {effect.params.filter(p => !(p.key === 'colorMix' && colorMode === 'source')).map(p => {
                   const val = params[p.key] ?? p.default
                   return (
@@ -344,16 +345,18 @@ export default function ControlPanel({
                           {p.unit ? ` ${p.unit}` : ''}
                         </span>
                       </div>
-                      <input
-                        type="range"
-                        min={p.min}
-                        max={p.max}
-                        step={p.step}
-                        value={val}
-                        onChange={e => onParamChange(p.key, parseFloat(e.target.value))}
-                        className="w-full"
-                        style={{ accentColor: 'var(--mint)' }}
-                      />
+                      <div className="py-2 lg:py-0">
+                        <input
+                          type="range"
+                          min={p.min}
+                          max={p.max}
+                          step={p.step}
+                          value={val}
+                          onChange={e => onParamChange(p.key, parseFloat(e.target.value))}
+                          className="w-full"
+                          style={{ accentColor: 'var(--mint)' }}
+                        />
+                      </div>
                       <div className="flex justify-between">
                         <span className="text-xs tabular-nums" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>{p.min}</span>
                         <span className="text-xs tabular-nums" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>{p.max}</span>
