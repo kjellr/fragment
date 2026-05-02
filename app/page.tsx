@@ -1,7 +1,7 @@
 'use client'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, Settings } from 'lucide-react'
 import ControlPanel from '@/components/ControlPanel'
 import { DEFAULT_PARAMS, EFFECTS, type EffectId } from '@/lib/effects'
 
@@ -31,6 +31,7 @@ export default function Page() {
   const [colorB, setColorB] = useState('#99b5ce')
   const [colorMode, setColorMode] = useState<'palette' | 'source'>('source')
   const [inputData, setInputData] = useState<any>({ type: 'none' })
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const handleParamChange = useCallback((key: string, val: number) => {
     setParams(p => ({ ...p, [key]: val }))
@@ -60,7 +61,20 @@ export default function Page() {
     <div className="flex h-full w-full" style={{ background: 'var(--void, #050507)' }}>
       {/* Canvas — fills remaining space */}
       <div className="flex-1 relative overflow-hidden">
-        <a
+        {/* Settings toggle — mobile only */}
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="lg:hidden absolute top-4 right-4 z-10 flex items-center justify-center rounded-lg"
+          style={{
+            width: 36, height: 36,
+            background: 'var(--panel)',
+            border: '1px solid var(--border)',
+            color: 'var(--muted-foreground)',
+          }}
+        >
+          <Settings size={15} />
+        </button>
+        <
           href="https://kjellr.com"
           target="_blank"
           rel="noopener noreferrer"
@@ -95,7 +109,21 @@ export default function Page() {
         />
       </div>
 
-      {/* Control panel — fixed right */}
+      {/* Backdrop — mobile only */}
+      {sidebarOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-20"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Control panel — fixed right on desktop, slide-in drawer on mobile */}
+      <div className={[
+        'fixed lg:relative right-0 top-0 bottom-0 z-30',
+        'lg:translate-x-0 transition-transform duration-300 ease-in-out',
+        sidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0',
+      ].join(' ')}>
       <ControlPanel
         effectId={effectId}
         params={params}
@@ -110,7 +138,9 @@ export default function Page() {
           setInputData(data)
           if (data.type === 'video' && data.isNewUpload) setParams(p => ({ ...p, zoom: 1 }))
         }}
+        onClose={() => setSidebarOpen(false)}
       />
+      </div>
     </div>
   )
 }

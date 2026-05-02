@@ -2,7 +2,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import {
   Wind, Type, ImageIcon, Video, Grid2x2,
-  ChevronRight, RotateCcw, Copy, Check,
+  ChevronRight, RotateCcw, Copy, Check, X,
 } from 'lucide-react'
 import InputZone from './InputZone'
 import { EFFECTS, VISIBLE_EFFECTS, DEFAULT_PARAMS, type EffectId, type EffectDef } from '@/lib/effects'
@@ -26,6 +26,7 @@ interface Props {
   onColorChange:     (a: string, b: string) => void
   onColorModeChange: (mode: 'palette' | 'source') => void
   onInputChange:     (data: any) => void
+  onClose?:          () => void
 }
 
 const PRESETS: { label: string; colorA: string; colorB: string }[] = [
@@ -39,7 +40,7 @@ const PRESETS: { label: string; colorA: string; colorB: string }[] = [
 
 export default function ControlPanel({
   effectId, params, colorA, colorB, colorMode,
-  onEffectChange, onParamChange, onColorChange, onColorModeChange, onInputChange,
+  onEffectChange, onParamChange, onColorChange, onColorModeChange, onInputChange, onClose,
 }: Props) {
   const [paramsOpen, setParamsOpen] = useState(true)
   const [inputOpen, setInputOpen] = useState(true)
@@ -92,9 +93,8 @@ export default function ControlPanel({
 
   return (
     <aside
-      className="flex flex-col h-full"
+      className="flex flex-col h-full w-[90vw] lg:w-[312px]"
       style={{
-        width: 312,
         flexShrink: 0,
         borderLeft: '1px solid var(--border)',
         background: 'var(--panel)',
@@ -104,12 +104,13 @@ export default function ControlPanel({
       }}
     >
       {/* App name */}
-      <div className="px-4 py-3 flex items-baseline gap-2" style={{ borderBottom: '1px solid var(--border)' }}>
-        <span style={{ fontFamily: 'var(--font-serif)', fontSize: 24, color: 'var(--foreground)' }}>
+      <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border)' }}>
+        <span style={{ fontFamily: 'var(--font-serif)', fontSize: 24, color: 'var(--foreground)', lineHeight: 1 }}>
           Fragment
         </span>
         <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>shader studio</span>
-        <div className="ml-auto relative group">
+        <div className="ml-auto flex items-center gap-1">
+        <div className="relative group">
           <button
             onClick={handleCopy}
             className="rounded"
@@ -131,6 +132,16 @@ export default function ControlPanel({
           >
             Copy prompt
           </div>
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="lg:hidden rounded opacity-50 hover:opacity-100 transition-opacity"
+            style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--muted-foreground)' }}
+          >
+            <X size={16} />
+          </button>
+        )}
         </div>
       </div>
 
@@ -161,7 +172,7 @@ export default function ControlPanel({
             key={e.id}
             ref={el => { buttonRefs.current[i] = el }}
             onClick={() => onEffectChange(e.id)}
-            className="flex items-center gap-2.5 rounded px-2.5 py-1.5 text-left text-sm cursor-pointer"
+            className="flex items-center gap-2.5 rounded px-2.5 py-2.5 lg:py-1.5 text-left text-sm cursor-pointer"
             style={{
               position: 'relative',
               background: 'transparent',
@@ -186,7 +197,7 @@ export default function ControlPanel({
         <div style={{ borderBottom: '1px solid var(--border)' }}>
           <button
             onClick={() => setInputOpen(o => !o)}
-            className="flex items-center gap-1.5 text-xs uppercase tracking-widest w-full px-4 py-3"
+            className="flex items-center gap-1.5 text-xs uppercase tracking-widest w-full px-4 py-4 lg:py-3"
             style={{ color: 'var(--muted-foreground)' }}
           >
             <ChevronRight
@@ -211,7 +222,7 @@ export default function ControlPanel({
       <div style={{ borderBottom: '1px solid var(--border)' }}>
         <button
           onClick={() => setPaletteOpen(o => !o)}
-          className="flex items-center gap-1.5 text-xs uppercase tracking-widest w-full px-4 py-3"
+          className="flex items-center gap-1.5 text-xs uppercase tracking-widest w-full px-4 py-4 lg:py-3"
           style={{ color: 'var(--muted-foreground)' }}
         >
           <ChevronRight
@@ -231,7 +242,7 @@ export default function ControlPanel({
               {(effectId === 'image' || effectId === 'video') && (
                 <button
                   onClick={() => onColorModeChange('source')}
-                  className="w-full rounded h-7 mb-1.5 transition-all text-xs font-mono"
+                  className="w-full rounded h-10 lg:h-7 mb-1.5 transition-all text-xs font-mono"
                   style={{
                     background: 'transparent',
                     border: colorMode === 'source' ? '2px solid var(--foreground)' : '1px solid var(--border)',
@@ -248,7 +259,7 @@ export default function ControlPanel({
                     key={preset.label}
                     onClick={() => onColorChange(preset.colorA, preset.colorB)}
                     title={preset.label}
-                    className="rounded h-7 transition-all"
+                    className="rounded h-10 lg:h-7 transition-all"
                     style={{
                       background: `linear-gradient(135deg, ${preset.colorA}, ${preset.colorB})`,
                       border: colorMode === 'palette' && colorA === preset.colorA && colorB === preset.colorB
