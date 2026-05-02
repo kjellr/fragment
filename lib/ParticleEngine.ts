@@ -23,6 +23,7 @@ void main() {
 
 const FRAG = `
 precision highp float;
+uniform float uBrightness;
 varying float vAlpha;
 varying vec3 vColor;
 
@@ -34,7 +35,7 @@ void main() {
   float halo = 1.0 - smoothstep(0.5, 1.0, d);
   float alpha = (core * 0.8 + halo * 0.2) * vAlpha;
   if (alpha < 0.005) discard;
-  gl_FragColor = vec4(vColor, alpha);
+  gl_FragColor = vec4(vColor * uBrightness, alpha);
 }
 `
 
@@ -300,6 +301,10 @@ export class ParticleEngine {
   private videoEl: HTMLVideoElement | null = null
   private videoCanvas: HTMLCanvasElement | null = null
   private videoCtx: CanvasRenderingContext2D | null = null
+  private sourceColors = false
+  private videoFrameCounter = 0
+  private videoDispX: Float32Array | null = null
+  private videoDispY: Float32Array | null = null
 
   constructor(canvas: HTMLCanvasElement, params: EngineParams = {}) {
     this.params = {
@@ -378,7 +383,8 @@ export class ParticleEngine {
       vertexShader: VERT,
       fragmentShader: FRAG,
       uniforms: {
-        uPixelRatio: { value: this.renderer.getPixelRatio() },
+        uPixelRatio:  { value: this.renderer.getPixelRatio() },
+        uBrightness:  { value: this.params.brightness ?? 1.0 },
       },
       transparent: true,
       depthWrite: false,
@@ -554,6 +560,7 @@ export class ParticleEngine {
   }
 
   private updateVideoTargets() {
+    if (++this.videoFrameCounter % 2 !== 0) return
     if (!this.videoEl || !this.videoCanvas || !this.videoCtx) return
     const v = this.videoEl
     if (v.readyState < 2) return
@@ -562,28 +569,77 @@ export class ParticleEngine {
     this.videoCtx.drawImage(v, 0, 0, vw, vh)
     const data = this.videoCtx.getImageData(0, 0, vw, vh).data
 
-    const bright: [number, number][] = []
+    // Letterbox into display space so particles respect the video's aspect ratio
+    const vidAspect = (v.videoWidth || vw) / (v.videoHeight || vh)
+    const dispAspect = this.width / this.height
+    let drawW, drawH, offX = 0, offY = 0
+    if (vidAspect > dispAspect) {
+      drawW = this.width;  drawH = this.width / vidAspect
+      offY = (this.height - drawH) / 2
+    } else {
+      drawH = this.height; drawW = this.height * vidAspect
+      offX = (this.width - drawW) / 2
+    }
+
+    // Build luminance-weighted list of bright pixels (sample every 2nd)
+    // Stores [worldX, worldY, r, g, b] so source colors can be applied
+    const bright: [number, number, number, number, number][] = []
+    const cumWeights: number[] = []
+    let totalWeight = 0
     const threshold = this.params.threshold * 255
     for (let y = 0; y < vh; y += 2) {
       for (let x = 0; x < vw; x += 2) {
         const idx = (y * vw + x) * 4
         const lum = data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114
         if (lum > threshold) {
-          bright.push([
-            (x / vw - 0.5) * this.width,
-            -(y / vh - 0.5) * this.height,
-          ])
+          totalWeight += (lum - threshold) / (255 - threshold)
+          const worldX = offX + (x / vw) * drawW - this.width  / 2
+          const worldY = -(offY + (y / vh) * drawH - this.height / 2)
+          bright.push([worldX, worldY, data[idx] / 255, data[idx + 1] / 255, data[idx + 2] / 255])
+          cumWeights.push(totalWeight)
         }
       }
     }
 
     if (bright.length === 0) return
+
+    // Stamp particle positions directly onto the video frame — no spring physics.
+    // Particle i always maps to the same proportional slot in the luminance
+    // distribution so it tracks the video content smoothly rather than flickering.
     for (let i = 0; i < this.count; i++) {
-      const p = bright[Math.floor(Math.random() * bright.length)]
-      this.targets[i * 3]     = p[0] + (Math.random() - 0.5) * 4
-      this.targets[i * 3 + 1] = p[1] + (Math.random() - 0.5) * 4
+      const slot = (i / this.count) * totalWeight
+      let lo = 0, hi = cumWeights.length - 1
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1
+        if (cumWeights[mid] < slot) lo = mid + 1
+        else hi = mid
+      }
+      this.positions[i * 3]      = bright[lo][0]
+      this.positions[i * 3 + 1]  = bright[lo][1]
+      this.velocities[i * 2]     = 0
+      this.velocities[i * 2 + 1] = 0
+      if (this.sourceColors) {
+        this.colors[i * 3]     = bright[lo][2]
+        this.colors[i * 3 + 1] = bright[lo][3]
+        this.colors[i * 3 + 2] = bright[lo][4]
+      }
     }
-    this.hasTargets = true
+    if (this.sourceColors) this.geometry.attributes.color.needsUpdate = true
+    this.hasTargets = false
+  }
+
+  setVideoSourceColors(enabled: boolean) {
+    this.sourceColors = enabled
+    if (!enabled) {
+      // Restore palette colors
+      for (let i = 0; i < this.count; i++) {
+        const t = Math.random()
+        this.colors[i * 3]     = this.colorAVec.r + (this.colorBVec.r - this.colorAVec.r) * t
+        this.colors[i * 3 + 1] = this.colorAVec.g + (this.colorBVec.g - this.colorAVec.g) * t
+        this.colors[i * 3 + 2] = this.colorAVec.b + (this.colorBVec.b - this.colorAVec.b) * t
+      }
+      this.geometry.attributes.color.needsUpdate = true
+    }
   }
 
   private fluidStep(dt: number) {
@@ -636,6 +692,54 @@ export class ParticleEngine {
     render(this.mProject, this.rtVelA)
   }
 
+  // ── Video cursor displacement + jitter ──────────────
+  private applyVideoDisplacement(dt: number, time: number) {
+    if (!this.videoDispX || this.videoDispX.length !== this.count) {
+      this.videoDispX = new Float32Array(this.count)
+      this.videoDispY = new Float32Array(this.count)
+    }
+
+    const { repulRadius, repulStrength, particleSize, jitter = 0 } = this.params
+    const mx = this.mouseX, my = this.mouseY
+    const decay = 1 - 4 * dt  // displacement springs back in ~0.5s
+    const n = this.noise3D
+
+    for (let i = 0; i < this.count; i++) {
+      let dx = this.videoDispX[i] * decay
+      let dy = this.videoDispY[i] * decay
+
+      const px = this.positions[i * 3], py = this.positions[i * 3 + 1]
+      const cx = px - mx, cy = py - my
+      const dist = Math.sqrt(cx * cx + cy * cy) + 0.001
+      if (dist < repulRadius) {
+        const force = ((repulRadius - dist) / repulRadius) ** 1.5
+        dx += (cx / dist) * force * repulStrength * dt * 60
+        dy += (cy / dist) * force * repulStrength * dt * 60
+      }
+
+      this.videoDispX[i] = dx
+      this.videoDispY[i] = dy
+
+      // Jitter: curl noise at world position so nearby particles flow together
+      let jx = 0, jy = 0
+      if (jitter > 0) {
+        const nx = px * 0.004 + this.seeds[i] * 0.1
+        const ny = py * 0.004 + this.seeds[i] * 0.1
+        const [cx, cy] = this.curl(nx, ny, time * 0.25)
+        jx = cx * jitter * 0.6
+        jy = cy * jitter * 0.6
+      }
+
+      this.positions[i * 3]     += dx + jx
+      this.positions[i * 3 + 1] += dy + jy
+
+      // Size animation (normally handled by updateParticles)
+      this.sizes[i] = particleSize * (0.5 + 0.8 * (Math.sin(this.seeds[i] * 3.7 + time * 0.5) * 0.5 + 0.5))
+    }
+    this.geometry.attributes.position.needsUpdate = true
+    this.geometry.attributes.aSize.needsUpdate = true
+  }
+
   // ── Main loop ───────────────────────────────────────
   private tick = (time: number) => {
     this.animId = requestAnimationFrame(this.tick)
@@ -644,8 +748,12 @@ export class ParticleEngine {
 
     this.renderer.setRenderTarget(null)
 
-    if (this.effectId === 'video') this.updateVideoTargets()
-    this.updateParticles(dt, time * 0.001)
+    if (this.effectId === 'video') {
+      this.updateVideoTargets()
+      this.applyVideoDisplacement(dt, time * 0.001)
+    } else {
+      this.updateParticles(dt, time * 0.001)
+    }
     this.renderer.render(this.scene, this.camera)
 
     this.prevMouseX = this.mouseX
@@ -669,7 +777,7 @@ export class ParticleEngine {
     this.renderer.setClearColor(0x050507, 1)
   }
 
-  setTextTargets(text: string) {
+  setTextTargets(text: string, fontFamily = 'Inter', fontWeight = 'bold') {
     if (!text.trim()) { this.hasTargets = false; return }
     const offscreen = document.createElement('canvas')
     const scale = Math.min(this.width / 800, 2)
@@ -679,7 +787,7 @@ export class ParticleEngine {
     ctx.fillStyle = '#000'
     ctx.fillRect(0, 0, offscreen.width, offscreen.height)
     ctx.fillStyle = '#fff'
-    ctx.font = `bold ${Math.floor(120 * scale)}px sans-serif`
+    ctx.font = `${fontWeight} ${Math.floor(120 * scale)}px ${fontFamily}`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     // Word wrap
@@ -779,8 +887,8 @@ export class ParticleEngine {
   setVideoElement(video: HTMLVideoElement) {
     this.videoEl = video
     this.videoCanvas = document.createElement('canvas')
-    this.videoCanvas.width  = 160
-    this.videoCanvas.height = 90
+    this.videoCanvas.width  = 640
+    this.videoCanvas.height = 360
     this.videoCtx = this.videoCanvas.getContext('2d')!
   }
 
@@ -799,6 +907,11 @@ export class ParticleEngine {
       for (let i = 0; i < this.count; i++)
         this.sizes[i] = value * (0.5 + Math.random() * 0.8)
       this.geometry.attributes.aSize.needsUpdate = true
+    } else if (key === 'zoom') {
+      this.camera.zoom = value
+      this.camera.updateProjectionMatrix()
+    } else if (key === 'brightness') {
+      this.material.uniforms.uBrightness.value = value
     }
   }
 

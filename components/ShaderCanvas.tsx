@@ -8,16 +8,19 @@ interface Props {
   params: Record<string, number>
   colorA: string
   colorB: string
+  colorMode: 'palette' | 'source'
   inputData: {
     type: 'none' | 'text' | 'image' | 'video'
     text?: string
+    fontFamily?: string
+    fontWeight?: string
     imageEl?: HTMLImageElement | HTMLCanvasElement
     videoEl?: HTMLVideoElement
   }
   onEngineReady?: (engine: ParticleEngine) => void
 }
 
-export default function ShaderCanvas({ effectId, params, colorA, colorB, inputData, onEngineReady }: Props) {
+export default function ShaderCanvas({ effectId, params, colorA, colorB, colorMode, inputData, onEngineReady }: Props) {
   const canvasRef  = useRef<HTMLCanvasElement>(null)
   const engineRef  = useRef<ParticleEngine | null>(null)
   const prevEffect = useRef<EffectId | null>(null)
@@ -47,12 +50,14 @@ export default function ShaderCanvas({ effectId, params, colorA, colorB, inputDa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Sync effect
+  // Sync effect — reset prevParams and prevColors so everything re-applies for the new effect
   useEffect(() => {
     const e = engineRef.current
     if (!e || effectId === prevEffect.current) return
     e.setEffect(effectId)
     prevEffect.current = effectId
+    prevParams.current = {}
+    prevColors.current = { a: '', b: '' }
   }, [effectId])
 
   // Sync params
@@ -75,20 +80,28 @@ export default function ShaderCanvas({ effectId, params, colorA, colorB, inputDa
       e.setColors(colorA, colorB)
       prevColors.current = { a: colorA, b: colorB }
     }
-  }, [colorA, colorB])
+  }, [colorA, colorB, effectId])
 
-  // Sync input
+  // Sync input — only apply if the input type matches the active effect
   useEffect(() => {
     const e = engineRef.current
     if (!e) return
-    if (inputData.type === 'text' && inputData.text) {
-      e.setTextTargets(inputData.text)
-    } else if (inputData.type === 'image' && inputData.imageEl) {
-      e.setImageTargets(inputData.imageEl, params.colorMix ?? 0.7)
-    } else if (inputData.type === 'video' && inputData.videoEl) {
+    if (effectId === 'text' && inputData.type === 'text' && inputData.text) {
+      e.setTextTargets(inputData.text, inputData.fontFamily, inputData.fontWeight)
+    } else if (effectId === 'image' && inputData.type === 'image' && inputData.imageEl) {
+      e.setImageTargets(inputData.imageEl, colorMode === 'source' ? 1.0 : (params.colorMix ?? 0.7))
+    } else if (effectId === 'video' && inputData.type === 'video' && inputData.videoEl) {
       e.setVideoElement(inputData.videoEl)
     }
-  }, [inputData, params.colorMix])
+  }, [effectId, inputData, params.colorMix, colorMode])
+
+  // Sync video source colors mode
+  useEffect(() => {
+    const e = engineRef.current
+    if (!e || effectId !== 'video') return
+    e.setVideoSourceColors(colorMode === 'source')
+    if (colorMode === 'palette') e.setColors(colorA, colorB)
+  }, [colorMode, effectId, colorA, colorB])
 
   return (
     <canvas

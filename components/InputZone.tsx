@@ -7,19 +7,34 @@ import type { EffectId } from '@/lib/effects'
 interface InputState {
   type: 'none' | 'text' | 'image' | 'video'
   text?: string
+  fontFamily?: string
+  fontWeight?: string
   imageEl?: HTMLImageElement | HTMLCanvasElement
   videoEl?: HTMLVideoElement
   preview?: string // data URL for display
 }
+
+const TYPEFACES = [
+  { id: 'inter-bold',         label: 'Inter Bold',            fontFamily: 'Inter',              fontWeight: 'bold', previewFamily: 'var(--font-inter), sans-serif',                previewWeight: '700' },
+  { id: 'inter-light',        label: 'Inter Light',           fontFamily: 'Inter',              fontWeight: '300',  previewFamily: 'var(--font-inter), sans-serif',                previewWeight: '300' },
+  { id: 'instrument-serif',   label: 'Instrument Serif',      fontFamily: "'Instrument Serif'", fontWeight: '400',  previewFamily: 'var(--font-serif), serif',                     previewWeight: '400' },
+  { id: 'unifraktur',         label: 'UnifrakturMaguntia',    fontFamily: 'UnifrakturMaguntia', fontWeight: '400',  previewFamily: 'var(--font-unifraktur), cursive',              previewWeight: '400' },
+  { id: 'playwrite-de-sas',   label: 'Playwrite DE SAS',      fontFamily: "'Playwrite DE SAS'", fontWeight: '400',  previewFamily: 'var(--font-playwrite-de-sas), cursive',        previewWeight: '400' },
+] as const
 
 interface Props {
   effectId: EffectId
   onInputChange: (state: InputState) => void
 }
 
+const DEFAULT_TEXTS = ['Fragment', 'Oh fuck', 'Sorry', 'The End']
+
 export default function InputZone({ effectId, onInputChange }: Props) {
   const [input, setInput] = useState<InputState>({ type: 'none' })
   const [text, setText] = useState('')
+  const [typefaceId, setTypefaceId] = useState<typeof TYPEFACES[number]['id']>('playwrite-de-sas')
+  const textVisitCount = useRef(0)
+  const isUserText = useRef(false)
   const [isDragging, setIsDragging] = useState(false)
   const [isPlaying, setIsPlaying] = useState(true)
   const fileRef  = useRef<HTMLInputElement>(null)
@@ -51,13 +66,25 @@ export default function InputZone({ effectId, onInputChange }: Props) {
     setText('')
   }, [input, commit])
 
+  const currentTypeface = () => TYPEFACES.find(t => t.id === typefaceId)!
+
   // Text debounce
   const handleTextChange = (val: string) => {
+    isUserText.current = val.trim().length > 0
     setText(val)
     if (textDebounce.current) clearTimeout(textDebounce.current)
     textDebounce.current = setTimeout(() => {
-      commit({ type: 'text', text: val })
+      const { fontFamily, fontWeight } = currentTypeface()
+      commit({ type: 'text', text: val, fontFamily, fontWeight })
     }, 400)
+  }
+
+  const handleTypefaceChange = (id: typeof TYPEFACES[number]['id']) => {
+    setTypefaceId(id)
+    if (text.trim()) {
+      const tf = TYPEFACES.find(t => t.id === id)!
+      commit({ type: 'text', text, fontFamily: tf.fontFamily, fontWeight: tf.fontWeight })
+    }
   }
 
   // File handling
@@ -97,11 +124,58 @@ export default function InputZone({ effectId, onInputChange }: Props) {
     else { vid.pause(); setIsPlaying(false) }
   }
 
-  // When effect changes, clear incompatible input
+  // On switching to text: re-apply user text, or load next default in sequence
   useEffect(() => {
-    if (input.type !== 'none' && !supported.includes(input.type as any)) {
-      clearInput()
+    if (effectId !== 'text') return
+    if (isUserText.current && text.trim()) {
+      const tf = TYPEFACES.find(t => t.id === typefaceId)!
+      document.fonts.load(`${tf.fontWeight} 120px Playwrite DE SAS`).finally(() => {
+        commit({ type: 'text', text, fontFamily: tf.fontFamily, fontWeight: tf.fontWeight })
+      })
+      return
     }
+    const defaultText = DEFAULT_TEXTS[textVisitCount.current % DEFAULT_TEXTS.length]
+    textVisitCount.current += 1
+    const tf = TYPEFACES.find(t => t.id === 'playwrite-de-sas')!
+    document.fonts.load(`${tf.fontWeight} 120px Playwrite DE SAS`).finally(() => {
+      setText(defaultText)
+      setTypefaceId('playwrite-de-sas')
+      commit({ type: 'text', text: defaultText, fontFamily: tf.fontFamily, fontWeight: tf.fontWeight })
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectId])
+
+  // On switching to image: re-apply existing image, or load default
+  useEffect(() => {
+    if (effectId !== 'image') return
+    if (input.type === 'image' && input.imageEl) {
+      commit({ ...input })
+      return
+    }
+    const base = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
+    const src = `${base}/kj_icon.png`
+    const img = new Image()
+    img.onload = () => commit({ type: 'image', imageEl: img, preview: src })
+    img.src = src
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectId])
+
+  // On switching to video: re-apply existing video, or load default
+  useEffect(() => {
+    if (effectId !== 'video') return
+    if (input.type === 'video' && input.videoEl) {
+      commit({ ...input })
+      return
+    }
+    const base = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
+    const url = `${base}/logo-animation.mp4`
+    const vid = videoRef.current!
+    vid.src = url
+    vid.loop = true
+    vid.muted = true
+    vid.play().catch(() => {})
+    setIsPlaying(true)
+    commit({ type: 'video', videoEl: vid, preview: url })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectId])
 
@@ -140,13 +214,38 @@ export default function InputZone({ effectId, onInputChange }: Props) {
             />
             {text && (
               <button
-                onClick={() => { setText(''); commit({ type: 'none' }) }}
+                onClick={() => { setText(''); isUserText.current = false; commit({ type: 'none' }) }}
                 className="absolute top-2 right-2 opacity-40 hover:opacity-100 transition-opacity"
               >
                 <X size={12} />
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Typeface selector */}
+      {supported.includes('text') && (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>
+            Typeface
+          </label>
+          <select
+            value={typefaceId}
+            onChange={e => handleTypefaceChange(e.target.value as typeof TYPEFACES[number]['id'])}
+            className="w-full text-sm rounded px-3 py-2.5 outline-none transition-colors"
+            style={{
+              background: 'var(--input)',
+              border: '1px solid var(--border)',
+              color: 'var(--foreground)',
+              fontFamily: TYPEFACES.find(t => t.id === typefaceId)?.previewFamily,
+              fontWeight: TYPEFACES.find(t => t.id === typefaceId)?.previewWeight,
+            }}
+          >
+            {TYPEFACES.map(tf => (
+              <option key={tf.id} value={tf.id}>{tf.label}</option>
+            ))}
+          </select>
         </div>
       )}
 
@@ -185,32 +284,31 @@ export default function InputZone({ effectId, onInputChange }: Props) {
               </button>
             </div>
           )}
-          {input.type === 'video' && (
-            <div className="relative group">
-              <video
-                ref={videoRef}
-                className="w-full h-24 object-cover rounded"
-                style={{ border: '1px solid var(--border)' }}
-                muted loop playsInline
-              />
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={togglePlay}
-                  className="rounded-full p-1.5"
-                  style={{ background: 'rgba(0,0,0,0.7)' }}
-                >
-                  {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-                </button>
-              </div>
+          {/* Single video element — always mounted so src/playback survive re-renders */}
+          <div className={`relative group ${input.type === 'video' ? '' : 'hidden'}`}>
+            <video
+              ref={videoRef}
+              className="w-full h-24 object-cover rounded"
+              style={{ border: '1px solid var(--border)' }}
+              muted loop playsInline
+            />
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <button
-                onClick={clearInput}
-                className="absolute top-1 right-1 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={togglePlay}
+                className="rounded-full p-1.5"
                 style={{ background: 'rgba(0,0,0,0.7)' }}
               >
-                <X size={12} />
+                {isPlaying ? <Pause size={14} /> : <Play size={14} />}
               </button>
             </div>
-          )}
+            <button
+              onClick={clearInput}
+              className="absolute top-1 right-1 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+              style={{ background: 'rgba(0,0,0,0.7)' }}
+            >
+              <X size={12} />
+            </button>
+          </div>
           {(!['image', 'video'].includes(input.type)) && (
             <button
               onClick={() => fileRef.current?.click()}
@@ -222,6 +320,7 @@ export default function InputZone({ effectId, onInputChange }: Props) {
                 border: `1px dashed ${isDragging ? 'var(--mint)' : 'var(--text-dim, oklch(0.3 0.008 240))'}`,
                 background: isDragging ? 'var(--mint-dim)' : 'transparent',
                 color: 'var(--muted-foreground)',
+                cursor: 'pointer',
               }}
             >
               {supported.includes('image')
@@ -235,10 +334,6 @@ export default function InputZone({ effectId, onInputChange }: Props) {
         </>
       )}
 
-      {/* Hidden video element for video mode */}
-      {supported.includes('video') && input.type !== 'video' && (
-        <video ref={videoRef} className="hidden" muted loop playsInline />
-      )}
     </div>
   )
 }

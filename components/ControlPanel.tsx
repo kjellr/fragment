@@ -1,11 +1,9 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import {
   Wind, Type, ImageIcon, Video,
-  ChevronDown, ChevronRight, RotateCcw,
+  ChevronRight, RotateCcw,
 } from 'lucide-react'
-import { Separator } from '@/components/ui/separator'
-import { Slider } from '@/components/ui/slider'
 import InputZone from './InputZone'
 import { EFFECTS, DEFAULT_PARAMS, type EffectId, type EffectDef } from '@/lib/effects'
 
@@ -21,27 +19,45 @@ interface Props {
   params: Record<string, number>
   colorA: string
   colorB: string
-  onEffectChange: (id: EffectId) => void
-  onParamChange:  (key: string, val: number) => void
-  onColorChange:  (a: string, b: string) => void
-  onInputChange:  (data: any) => void
+  colorMode: 'palette' | 'source'
+  onEffectChange:    (id: EffectId) => void
+  onParamChange:     (key: string, val: number) => void
+  onColorChange:     (a: string, b: string) => void
+  onColorModeChange: (mode: 'palette' | 'source') => void
+  onInputChange:     (data: any) => void
 }
 
 const PRESETS: { label: string; colorA: string; colorB: string }[] = [
-  { label: 'Mint',    colorA: '#78d2aa', colorB: '#3a7cbd' },
-  { label: 'Ember',   colorA: '#ff6b35', colorB: '#ffb347' },
-  { label: 'Violet',  colorA: '#b47fdd', colorB: '#4a2fa0' },
-  { label: 'Snow',    colorA: '#e8e3dc', colorB: '#8ba5bb' },
-  { label: 'Gold',    colorA: '#f5c842', colorB: '#c87941' },
-  { label: 'Rose',    colorA: '#ff7eb3', colorB: '#ff4466' },
+  { label: 'Mint',    colorA: '#84e7bb', colorB: '#4088d0' },
+  { label: 'Ember',   colorA: '#ff763a', colorB: '#ffc54e' },
+  { label: 'Violet',  colorA: '#c68cf3', colorB: '#5134b0' },
+  { label: 'Snow',    colorA: '#ffffff', colorB: '#99b5ce' },
+  { label: 'Gold',    colorA: '#ffdc49', colorB: '#dc8547' },
+  { label: 'Rose',    colorA: '#ff8bc5', colorB: '#ff4b70' },
 ]
 
 export default function ControlPanel({
-  effectId, params, colorA, colorB,
-  onEffectChange, onParamChange, onColorChange, onInputChange,
+  effectId, params, colorA, colorB, colorMode,
+  onEffectChange, onParamChange, onColorChange, onColorModeChange, onInputChange,
 }: Props) {
   const [paramsOpen, setParamsOpen] = useState(true)
+  const [inputOpen, setInputOpen] = useState(true)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const effect = EFFECTS.find(e => e.id === effectId)!
+
+  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const [indicator, setIndicator] = useState({ top: 0, height: 0 })
+  const [fading, setFading] = useState(false)
+
+  useEffect(() => {
+    const idx = EFFECTS.findIndex(e => e.id === effectId)
+    const btn = buttonRefs.current[idx]
+    if (btn) setIndicator({ top: btn.offsetTop, height: btn.offsetHeight })
+
+    setFading(true)
+    const t = setTimeout(() => setFading(false), 180)
+    return () => clearTimeout(t)
+  }, [effectId])
 
   const handleReset = useCallback(() => {
     for (const p of effect.params) onParamChange(p.key, p.default)
@@ -51,7 +67,7 @@ export default function ControlPanel({
     <aside
       className="flex flex-col h-full"
       style={{
-        width: 272,
+        width: 312,
         flexShrink: 0,
         borderLeft: '1px solid var(--border)',
         background: 'var(--panel)',
@@ -62,27 +78,45 @@ export default function ControlPanel({
     >
       {/* App name */}
       <div className="px-4 py-3 flex items-baseline gap-2" style={{ borderBottom: '1px solid var(--border)' }}>
-        <span style={{ fontFamily: 'var(--font-serif)', fontSize: 18, color: 'var(--foreground)' }}>
+        <span style={{ fontFamily: 'var(--font-serif)', fontSize: 24, color: 'var(--foreground)' }}>
           Fragment
         </span>
         <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>shader studio</span>
       </div>
 
       {/* Effect selector */}
-      <div className="flex flex-col gap-0.5 px-3 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
+      <div className="flex flex-col gap-0.5 px-3 py-3" style={{ borderBottom: '1px solid var(--border)', position: 'relative' }}>
         <p className="text-xs uppercase tracking-widest mb-2 px-1" style={{ color: 'var(--muted-foreground)' }}>
           Effect
         </p>
-        {EFFECTS.map(e => (
+        {/* Sliding background pill */}
+        {indicator.height > 0 && (
+          <div
+            style={{
+              position: 'absolute',
+              left: 12,
+              right: 12,
+              top: indicator.top,
+              height: indicator.height,
+              background: 'var(--mint-dim, oklch(0.74 0.11 163 / 8%))',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              transition: 'top 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+        {EFFECTS.map((e, i) => (
           <button
             key={e.id}
+            ref={el => { buttonRefs.current[i] = el }}
             onClick={() => onEffectChange(e.id)}
-            className="flex items-center gap-2.5 rounded px-2.5 py-1.5 text-left transition-colors text-sm"
+            className="flex items-center gap-2.5 rounded px-2.5 py-1.5 text-left text-sm cursor-pointer"
             style={{
-              background: e.id === effectId ? 'var(--mint-dim, oklch(0.74 0.11 163 / 8%))' : 'transparent',
+              position: 'relative',
+              background: 'transparent',
               color: e.id === effectId ? 'var(--mint, oklch(0.74 0.11 163))' : 'var(--muted-foreground)',
               border: '1px solid transparent',
-              borderColor: e.id === effectId ? 'var(--border)' : 'transparent',
             }}
           >
             <span style={{ opacity: e.id === effectId ? 1 : 0.5 }}>{ICONS[e.id]}</span>
@@ -94,76 +128,131 @@ export default function ControlPanel({
         ))}
       </div>
 
+      {/* Panels — fade on effect switch */}
+      <div style={{ opacity: fading ? 0 : 1, transition: 'opacity 180ms ease' }}>
+
       {/* Input zone */}
       {effect.inputs.length > 0 && (
         <div style={{ borderBottom: '1px solid var(--border)' }}>
-          <p className="text-xs uppercase tracking-widest px-4 pt-3 pb-1" style={{ color: 'var(--muted-foreground)' }}>
+          <button
+            onClick={() => setInputOpen(o => !o)}
+            className="flex items-center gap-1.5 text-xs uppercase tracking-widest w-full px-4 py-3"
+            style={{ color: 'var(--muted-foreground)' }}
+          >
+            <ChevronRight
+              size={12}
+              style={{ transition: 'transform 200ms ease', transform: inputOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
+            />
             Input
-          </p>
-          <InputZone effectId={effectId} onInputChange={onInputChange} />
+          </button>
+          <div style={{
+            display: 'grid',
+            gridTemplateRows: inputOpen ? '1fr' : '0fr',
+            transition: 'grid-template-rows 220ms cubic-bezier(0.4, 0, 0.2, 1)',
+          }}>
+            <div style={{ overflow: 'hidden' }}>
+              <InputZone effectId={effectId} onInputChange={onInputChange} />
+            </div>
+          </div>
         </div>
       )}
 
       {/* Color palette */}
-      <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
-        <p className="text-xs uppercase tracking-widest mb-2" style={{ color: 'var(--muted-foreground)' }}>
-          Palette
-        </p>
-        <div className="grid grid-cols-3 gap-1.5 mb-3">
-          {PRESETS.map(preset => (
-            <button
-              key={preset.label}
-              onClick={() => onColorChange(preset.colorA, preset.colorB)}
-              title={preset.label}
-              className="rounded h-7 transition-all"
-              style={{
-                background: `linear-gradient(135deg, ${preset.colorA}, ${preset.colorB})`,
-                border: (colorA === preset.colorA && colorB === preset.colorB)
-                  ? '2px solid var(--foreground)'
-                  : '1px solid transparent',
-                transform: (colorA === preset.colorA && colorB === preset.colorB) ? 'scale(1.05)' : 'scale(1)',
-              }}
-            />
-          ))}
-        </div>
-        <div className="flex gap-2 items-center">
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs" style={{ color: 'var(--muted-foreground)' }}>A</label>
-            <input
-              type="color"
-              value={colorA}
-              onChange={e => onColorChange(e.target.value, colorB)}
-              className="rounded cursor-pointer"
-              style={{ width: 28, height: 20, padding: 1, background: 'none', border: '1px solid var(--border)' }}
-            />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs" style={{ color: 'var(--muted-foreground)' }}>B</label>
-            <input
-              type="color"
-              value={colorB}
-              onChange={e => onColorChange(colorA, e.target.value)}
-              className="rounded cursor-pointer"
-              style={{ width: 28, height: 20, padding: 1, background: 'none', border: '1px solid var(--border)' }}
-            />
-          </div>
-          <div
-            className="flex-1 h-5 rounded"
-            style={{ background: `linear-gradient(90deg, ${colorA}, ${colorB})` }}
+      <div style={{ borderBottom: '1px solid var(--border)' }}>
+        <button
+          onClick={() => setPaletteOpen(o => !o)}
+          className="flex items-center gap-1.5 text-xs uppercase tracking-widest w-full px-4 py-3"
+          style={{ color: 'var(--muted-foreground)' }}
+        >
+          <ChevronRight
+            size={12}
+            style={{ transition: 'transform 200ms ease', transform: paletteOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
           />
+          Palette
+        </button>
+        <div style={{
+          display: 'grid',
+          gridTemplateRows: paletteOpen ? '1fr' : '0fr',
+          transition: 'grid-template-rows 220ms cubic-bezier(0.4, 0, 0.2, 1)',
+        }}>
+          <div style={{ overflow: 'hidden' }}>
+            <div className="px-4 pb-3">
+              {/* Source option — image/video only */}
+              {(effectId === 'image' || effectId === 'video') && (
+                <button
+                  onClick={() => onColorModeChange('source')}
+                  className="w-full rounded h-7 mb-1.5 transition-all text-xs font-mono"
+                  style={{
+                    background: 'transparent',
+                    border: colorMode === 'source' ? '2px solid var(--foreground)' : '1px solid var(--border)',
+                    color: colorMode === 'source' ? 'var(--foreground)' : 'var(--muted-foreground)',
+                    transform: colorMode === 'source' ? 'scale(1.02)' : 'scale(1)',
+                  }}
+                >
+                  Default
+                </button>
+              )}
+              <div className="grid grid-cols-3 gap-1.5 mb-3">
+                {PRESETS.map(preset => (
+                  <button
+                    key={preset.label}
+                    onClick={() => onColorChange(preset.colorA, preset.colorB)}
+                    title={preset.label}
+                    className="rounded h-7 transition-all"
+                    style={{
+                      background: `linear-gradient(135deg, ${preset.colorA}, ${preset.colorB})`,
+                      border: colorMode === 'palette' && colorA === preset.colorA && colorB === preset.colorB
+                        ? '2px solid var(--foreground)'
+                        : '1px solid transparent',
+                      transform: colorMode === 'palette' && colorA === preset.colorA && colorB === preset.colorB ? 'scale(1.05)' : 'scale(1)',
+                    }}
+                  />
+                ))}
+              </div>
+              <div className="flex gap-2 items-center">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs" style={{ color: 'var(--muted-foreground)' }}>A</label>
+                  <input
+                    type="color"
+                    value={colorA}
+                    onChange={e => onColorChange(e.target.value, colorB)}
+                    className="rounded cursor-pointer"
+                    style={{ width: 28, height: 20, padding: 1, background: 'none', border: '1px solid var(--border)' }}
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs" style={{ color: 'var(--muted-foreground)' }}>B</label>
+                  <input
+                    type="color"
+                    value={colorB}
+                    onChange={e => onColorChange(colorA, e.target.value)}
+                    className="rounded cursor-pointer"
+                    style={{ width: 28, height: 20, padding: 1, background: 'none', border: '1px solid var(--border)' }}
+                  />
+                </div>
+                <div
+                  className="flex-1 h-5 rounded"
+                  style={{ background: `linear-gradient(90deg, ${colorA}, ${colorB})` }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Parameters */}
       {effect.params.length > 0 && (
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="flex items-center px-4 py-3">
             <button
               onClick={() => setParamsOpen(o => !o)}
-              className="flex items-center gap-1 text-xs uppercase tracking-widest"
+              className="flex items-center gap-1.5 text-xs uppercase tracking-widest flex-1"
               style={{ color: 'var(--muted-foreground)' }}
             >
-              {paramsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              <ChevronRight
+                size={12}
+                style={{ transition: 'transform 200ms ease', transform: paramsOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
+              />
               Parameters
             </button>
             <button
@@ -174,43 +263,50 @@ export default function ControlPanel({
               <RotateCcw size={11} />
             </button>
           </div>
-
-          {paramsOpen && (
-            <div className="flex flex-col gap-4">
-              {effect.params.map(p => {
-                const val = params[p.key] ?? p.default
-                return (
-                  <div key={p.key} className="flex flex-col gap-1.5">
-                    <div className="flex justify-between items-baseline">
-                      <label className="text-xs font-mono" style={{ color: 'var(--muted-foreground)' }}>
-                        {p.label}
-                      </label>
-                      <span className="text-xs font-mono tabular-nums" style={{ color: 'var(--foreground)' }}>
-                        {p.step < 1 ? val.toFixed(2) : Math.round(val)}
-                        {p.unit ? ` ${p.unit}` : ''}
-                      </span>
+          <div style={{
+            display: 'grid',
+            gridTemplateRows: paramsOpen ? '1fr' : '0fr',
+            transition: 'grid-template-rows 220ms cubic-bezier(0.4, 0, 0.2, 1)',
+          }}>
+            <div style={{ overflow: 'hidden' }}>
+              <div className="flex flex-col gap-4 px-4 pb-3">
+                {effect.params.map(p => {
+                  const val = params[p.key] ?? p.default
+                  return (
+                    <div key={p.key} className="flex flex-col gap-1.5">
+                      <div className="flex justify-between items-baseline">
+                        <label className="text-xs font-mono" style={{ color: 'var(--muted-foreground)' }}>
+                          {p.label}
+                        </label>
+                        <span className="text-xs font-mono tabular-nums" style={{ color: 'var(--foreground)' }}>
+                          {p.step < 1 ? val.toFixed(2) : Math.round(val)}
+                          {p.unit ? ` ${p.unit}` : ''}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={p.min}
+                        max={p.max}
+                        step={p.step}
+                        value={val}
+                        onChange={e => onParamChange(p.key, parseFloat(e.target.value))}
+                        className="w-full"
+                        style={{ accentColor: 'var(--mint)' }}
+                      />
+                      <div className="flex justify-between">
+                        <span className="text-xs tabular-nums" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>{p.min}</span>
+                        <span className="text-xs tabular-nums" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>{p.max}</span>
+                      </div>
                     </div>
-                    <input
-                      type="range"
-                      min={p.min}
-                      max={p.max}
-                      step={p.step}
-                      value={val}
-                      onChange={e => onParamChange(p.key, parseFloat(e.target.value))}
-                      className="w-full"
-                      style={{ accentColor: 'var(--mint)' }}
-                    />
-                    <div className="flex justify-between">
-                      <span className="text-xs tabular-nums" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>{p.min}</span>
-                      <span className="text-xs tabular-nums" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>{p.max}</span>
-                    </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
-          )}
+          </div>
         </div>
       )}
+
+      </div>{/* end fading panels */}
 
       {/* Footer */}
       <div className="mt-auto px-4 py-3" style={{ borderTop: '1px solid var(--border)' }}>
