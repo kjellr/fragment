@@ -105,7 +105,7 @@ export default function ControlPanel({
     >
       {/* App name */}
       <div className="flex px-4 py-3 items-baseline gap-2" style={{ borderBottom: '1px solid var(--border)' }}>
-        <span className="hidden lg:inline" style={{ fontFamily: 'var(--font-serif)', fontSize: 24, color: 'var(--foreground)', lineHeight: 1 }}>
+        <span className="hidden lg:inline" style={{ fontFamily: 'var(--font-unifraktur)', fontSize: 24, color: 'var(--foreground)', lineHeight: 1 }}>
           Fragment
         </span>
         <span className="hidden lg:inline text-sm lg:text-xs" style={{ color: 'var(--muted-foreground)' }}>shader studio</span>
