@@ -113,7 +113,6 @@ export default function ControlPanel({
         <div className="relative group">
           <button
             onClick={handleCopy}
-            className="rounded"
             className="rounded w-11 h-11 lg:w-7 lg:h-7 flex items-center justify-center flex-shrink-0"
             style={{ color: copied ? 'var(--mint)' : 'var(--muted-foreground)' }}
           >
